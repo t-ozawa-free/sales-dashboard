@@ -34,9 +34,26 @@ if uploaded_file is not None:  # ファイルがアップロードされた場�
     @st.cache_data  # キャッシュ機能を使用してデータを読み込む
     def load_uploaded_data(file):
         df = pd.read_csv(file)
-        df["date"] = pd.to_datetime(df["date"])
+        #df["date"] = pd.to_datetime(df["date"])  # 不正な日付が入っていると、エラーになってしまうので、この行を削除
         return df
-    df = load_uploaded_data(uploaded_file)
+    try:
+        df = load_uploaded_data(uploaded_file)
+    except Exception:
+        st.error("❌ ファイルが空または読み込めません。データが含まれるCSVをアップロードしてください。")
+        st.stop()
+    # ====== バリデーション ======
+    # 空ファイルチェック
+    if len(df) == 0:
+        st.error("❌ ファイルが空です。データが含まれるCSVをアップロードしてください。")
+        st.stop()
+    
+    # 必須列の存在確認
+    required_columns = ["date", "sales_amount"]
+    missing_columns = [col for col in required_columns if col not in df.columns]
+    if missing_columns:
+        st.error(f"❌ 必須列が見つかりません: {missing_columns}。正しいCSVファイルをアップロードしてください。")
+        st.stop()
+
     st.sidebar.success("✅ ファイルを読み込みました")
 else:
     # サンプルデータを使用
@@ -47,6 +64,141 @@ else:
         return df
     df = load_sample_data()
     st.sidebar.info("📂 サンプルデータを表示中")
+
+# ========================================
+# データ前処理
+# ========================================
+
+# 前処理前の情報を保存
+df_before = df.copy()
+
+# --------- 異常値対応 ---------
+
+# date列：不正な日付をNaNに変換
+df["date"] = pd.to_datetime(df["date"], errors="coerce")
+
+# IQR法で異常値の上限・下限を計算する関数
+def calc_iqr_bounds(series):
+    Q1 = series.quantile(0.25)  # 第一四分位数を計算
+    Q3 = series.quantile(0.75)  # 第三四分位数を計算
+    IQR = Q3 - Q1  # 四分位範囲を計算
+    lower_bound = Q1 - 1.5 * IQR  # 下限を計算
+    upper_bound = Q3 + 1.5 * IQR  # 上限を計算
+    return lower_bound, upper_bound  # 下限と上限を返す
+
+
+# unit_price列：マイナス値・平均の10倍以上を中央値に置き換え
+unit_price_median = df["unit_price"].median()  # 中央値を計算
+unit_price_lower, unit_price_uppper = calc_iqr_bounds(df["unit_price"])  # IQR法で異常値の上限・下限を計算
+df.loc[df["unit_price"] < 0, "unit_price"] = unit_price_median  # マイナス値を中央値に置き換え
+df.loc[df["unit_price"] > unit_price_uppper, "unit_price"] = unit_price_median  # 上限を中央値に置き換え
+
+# quantity列：マイナス値を中央値に置き換え
+quantity_median = df["quantity"].median()  # 中央値を計算
+df.loc[df["quantity"] < 0, "quantity"] = quantity_median  # マイナス値を中央値に置き換え
+
+# sales_amount列：マイナス値・平均の10倍以上を中央値に置き換え
+sales_amount_median = df["sales_amount"].median()  # 中央値を計算
+sales_amount_lower, sales_amount_uppper = calc_iqr_bounds(df["sales_amount"])  # IQR法で異常値の上限・下限を計算
+df.loc[df["sales_amount"] < 0, "sales_amount"] = sales_amount_median  # マイナス値を中央値に置き換え
+df.loc[df["sales_amount"] > sales_amount_uppper, "sales_amount"] = sales_amount_median  # 上限を中央値に置き換え
+# --------- 欠損値対応 ---------
+
+# date列：欠損値の行を削除
+df = df.dropna(subset=["date"])
+
+# product_name列：欠損値を最頻値で補完
+df["product_name"] = df["product_name"].fillna(df["product_name"].mode()[0])  # 最頻値で補完
+
+# category列：欠損値を最頻値で補完
+df["category"] = df["category"].fillna(df["category"].mode()[0])  # 最頻値で補完
+
+# unit_price列：欠損値を中央値で補完
+df["unit_price"] = df["unit_price"].fillna(unit_price_median)  # 中央値で補完
+
+# quantity列：欠損値を中央値で補完
+df["quantity"] = df["quantity"].fillna(quantity_median)  # 中央値で補完
+
+# sales_amount列：欠損値を中央値で補完
+df["sales_amount"] = df["sales_amount"].fillna(sales_amount_median)  # 中央値で補完
+
+# customer_id列: 欠損値の行を削除
+df = df.dropna(subset=["customer_id"])
+
+# --------- データ品質レポート ---------
+st.header("📋 データ品質レポート")
+
+# 前後比較
+col1, col2, col3 = st.columns(3)  # 3列のカラムを作成
+with col1:
+    st.metric("処理前行数", f"{len(df_before):,}件")
+with col2:
+    st.metric("処理後行数", f"{len(df):,}件")
+with col3:
+    st.metric("削除行数", f"{len(df_before) - len(df):,}件")
+
+# 欠損値対応結果
+with st.expander("📊 欠損値対応結果"):
+    missing_before = df_before.isnull().sum()  # 前処理前行数の欠損値を計算
+    missing_after = df.isnull().sum()  # 後処理後行数の欠損値を計算
+    missing_report = pd.DataFrame({
+        "列名": missing_before.index,
+        "前処理前行数": missing_before.values,
+        "後処理後行数": missing_after.values,
+        "対応内容": [
+            "不正日付・欠損業を削除",
+            "最頻値で補完",
+            "最頻値で補完",
+            "中央値で補完",
+            "中央値で補完",
+            "中央値で補完",
+            "欠損業を削除"
+        ]
+    })
+    st.dataframe(missing_report, width="stretch")
+
+# 異常値対応結果
+with st.expander("📊 異常値対応結果"):
+    # 検出件数を計算
+    invalid_date_count = df_before["date"].astype(str).str.contains("INVALID_DATE").sum()  # INVALID_DATEが含まれる行数を計算
+    unit_price_negative = (df_before["unit_price"] < 0).sum()  # マイナス値の行数を計算
+    unit_price_large = (df_before["unit_price"] > unit_price_uppper).sum()  # 平均の10倍以上の行数を計算
+    quantity_negative = (df_before["quantity"] < 0).sum()  # マイナス値の行数を計算
+    sales_amount_negative = (df_before["sales_amount"] < 0).sum()  # マイナス値の行数を計算
+    sales_amount_large = (df_before["sales_amount"] > sales_amount_uppper).sum()  # 平均の10倍以上の行数を計算
+
+    # レポートデータを作成
+    anomaly_report = pd.DataFrame({
+        "列名": ["date", "unit_price", "unit_price", "quantity", "sales_amount", "sales_amount"],
+        "異常値種類": [
+            "INVALID_DATE",
+            "マイナス値",
+            "IQR法による異常値",
+            "マイナス値",
+            "マイナス値",
+            "IQR法による異常値"
+        ],
+        "検出件数": [
+            invalid_date_count,
+            unit_price_negative,
+            unit_price_large,
+            quantity_negative,
+            sales_amount_negative,
+            sales_amount_large
+        ],
+        "対応内容": [
+            "不正業を削除",
+            "中央値で置換",
+            "中央値で置換",
+            "中央値で置換",
+            "中央値で置換",
+            "中央値で置換"
+        ]
+    })
+    st.dataframe(anomaly_report, width="stretch")
+
+st.markdown("---")
+
 
 # データ表示
 st.subheader("データプレビュー")  # データプレビューの表示設定
