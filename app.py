@@ -65,17 +65,6 @@ else:
     df = load_sample_data()
     st.sidebar.info("📂 サンプルデータを表示中")
 
-# ========================================
-# データ前処理
-# ========================================
-
-# 前処理前の情報を保存
-df_before = df.copy()
-
-# --------- 異常値対応 ---------
-
-# date列：不正な日付をNaNに変換
-df["date"] = pd.to_datetime(df["date"], errors="coerce")
 
 # IQR法で異常値の上限・下限を計算する関数
 def calc_iqr_bounds(series):
@@ -86,44 +75,111 @@ def calc_iqr_bounds(series):
     upper_bound = Q3 + 1.5 * IQR  # 上限を計算
     return lower_bound, upper_bound  # 下限と上限を返す
 
+# 
+def format_yaxis_man(ax):
+    # Y軸を万単位で表示する
+    ax.yaxis.set_major_formatter(plt.FuncFormatter(lambda x, pos: f"{int(x/10000)}万"))
 
-# unit_price列：マイナス値・平均の10倍以上を中央値に置き換え
-unit_price_median = df["unit_price"].median()  # 中央値を計算
-unit_price_lower, unit_price_uppper = calc_iqr_bounds(df["unit_price"])  # IQR法で異常値の上限・下限を計算
-df.loc[df["unit_price"] < 0, "unit_price"] = unit_price_median  # マイナス値を中央値に置き換え
-df.loc[df["unit_price"] > unit_price_uppper, "unit_price"] = unit_price_median  # 上限を中央値に置き換え
 
-# quantity列：マイナス値を中央値に置き換え
-quantity_median = df["quantity"].median()  # 中央値を計算
-df.loc[df["quantity"] < 0, "quantity"] = quantity_median  # マイナス値を中央値に置き換え
+def preprocess_data(df):
+    """
+    データの前処理を実行
 
-# sales_amount列：マイナス値・平均の10倍以上を中央値に置き換え
-sales_amount_median = df["sales_amount"].median()  # 中央値を計算
-sales_amount_lower, sales_amount_uppper = calc_iqr_bounds(df["sales_amount"])  # IQR法で異常値の上限・下限を計算
-df.loc[df["sales_amount"] < 0, "sales_amount"] = sales_amount_median  # マイナス値を中央値に置き換え
-df.loc[df["sales_amount"] > sales_amount_uppper, "sales_amount"] = sales_amount_median  # 上限を中央値に置き換え
-# --------- 欠損値対応 ---------
+    Parmeters:
+    ----------
+    df : DataFrame
+        前処理を行うデータ
+    
+    Returns:
+    ----------
+    df_clean : DataFrame
+        前処理後のデータ
+    report_data : dict
+        レポート用のデータ
+    """
 
-# date列：欠損値の行を削除
-df = df.dropna(subset=["date"])
+    # 前処理前の情報を保存
+    df_before = df.copy()
+    df_clean = df.copy()
 
-# product_name列：欠損値を最頻値で補完
-df["product_name"] = df["product_name"].fillna(df["product_name"].mode()[0])  # 最頻値で補完
+    # --------- 異常値対応 ---------
+    # date列：不正な日付をNaNに変更k
+    df_clean["date"] = pd.to_datetime(df_clean["date"], errors="coerce")
 
-# category列：欠損値を最頻値で補完
-df["category"] = df["category"].fillna(df["category"].mode()[0])  # 最頻値で補完
+    # unit_price列：マイナス値・IQR上限異常を中央値に置き換え
+    unit_price_median = df_clean["unit_price"].median()  # 中央値を計算
+    unit_price_lower, unit_price_uppper = calc_iqr_bounds(df_clean["unit_price"])  # IQR法で異常値の上限・下限を計算
+    df_clean.loc[df_clean["unit_price"] < 0, "unit_price"] = unit_price_median  # マイナス値を中央値に置き換え
+    df_clean.loc[df_clean["unit_price"] > unit_price_uppper, "unit_price"] = unit_price_median  # 上限を中央値に置き換え
 
-# unit_price列：欠損値を中央値で補完
-df["unit_price"] = df["unit_price"].fillna(unit_price_median)  # 中央値で補完
+    # quantity列：マイナス値を中央値に置き換え
+    quantity_median = df_clean["quantity"].median()  # 中央値を計算
+    df_clean.loc[df_clean["quantity"] < 0, "quantity"] = quantity_median  # マイナス値を中央値に置き換え
 
-# quantity列：欠損値を中央値で補完
-df["quantity"] = df["quantity"].fillna(quantity_median)  # 中央値で補完
+    # sales_amount列：マイナス値・IQR上限異常を中央値に置き換え
+    sales_amount_median = df_clean["sales_amount"].median()  # 中央値を計算
+    sales_amount_lower, sales_amount_uppper = calc_iqr_bounds(df_clean["sales_amount"])  # IQR法で異常値の上限・下限を計算
+    df_clean.loc[df_clean["sales_amount"] < 0, "sales_amount"] = sales_amount_median  # マイナス値を中央値に置き換え
+    df_clean.loc[df_clean["sales_amount"] > sales_amount_uppper, "sales_amount"] = sales_amount_median  # 上限を中央値に置き換え
 
-# sales_amount列：欠損値を中央値で補完
-df["sales_amount"] = df["sales_amount"].fillna(sales_amount_median)  # 中央値で補完
+    # --------- 欠損値対応 ---------
+    # date列：欠損値の行を削除
+    df_clean = df_clean.dropna(subset=["date"])
 
-# customer_id列: 欠損値の行を削除
-df = df.dropna(subset=["customer_id"])
+    # product_name列：欠損値を最頻値で補完
+    df_clean["product_name"] = df_clean["product_name"].fillna(df_clean["product_name"].mode()[0])  # 最頻値で補完
+
+    # category列：欠損値を最頻値で補完
+    df_clean["category"] = df_clean["category"].fillna(df_clean["category"].mode()[0])  # 最頻値で補完
+
+    # unit_price列：欠損値を中央値で補完
+    df_clean["unit_price"] = df_clean["unit_price"].fillna(unit_price_median)  # 中央値で補完
+
+    # quantity列：欠損値を中央値で補完
+    df_clean["quantity"] = df_clean["quantity"].fillna(quantity_median)  # 中央値で補完
+
+    # sales_amount列：欠損値を中央値で補完
+    df_clean["sales_amount"] = df_clean["sales_amount"].fillna(sales_amount_median)  # 中央値で補完
+
+    # customer_id列: 欠損値の行を削除
+    df_clean = df_clean.dropna(subset=["customer_id"])
+
+    # --------- レポートデータ作成 ---------
+    # 欠損値レポート
+    missing_before = df_before.isnull().sum()  # 前処理前行数の欠損値を計算
+    missing_after = df_clean.isnull().sum()  # 後処理後行数の欠損値を計算
+
+    # 異常値レポート
+    invalid_date_count = df_before["date"].astype(str).str.contains("INVALID_DATE").sum()  # INVALID_DATEが含まれる行数を計算
+    unit_price_negative = (df_before["unit_price"] < 0).sum()  # マイナス値の行数を計算
+    unit_price_large = (df_before["unit_price"] > unit_price_uppper).sum()  # IQR法による異常値の行数を計算
+    quantity_negative = (df_before["quantity"] < 0).sum()  # マイナス値の行数を計算
+    sales_amount_negative = (df_before["sales_amount"] < 0).sum()  # マイナス値の行数を計算
+    sales_amount_large = (df_before["sales_amount"] > sales_amount_uppper).sum()  # IQR法による異常値の行数を計算
+
+    # レポートデータをまとめる
+    report_data = {
+        "rows_before": len(df_before),
+        "rows_after": len(df_clean),
+        "rows_deleted": len(df_before) - len(df_clean),
+        "missing_before": missing_before,
+        "missing_after": missing_after,
+        "anomaly_counts": {
+            "invalid_date": invalid_date_count,
+            "unit_price_negative": unit_price_negative,
+            "unit_price_large": unit_price_large,
+            "quantity_negative": quantity_negative,
+            "sales_amount_negative": sales_amount_negative,
+            "sales_amount_large": sales_amount_large
+        }
+    }
+
+    return df_clean, report_data
+
+# ========================================
+# データ前処理
+# ========================================
+df, report_data = preprocess_data(df)
 
 # --------- データ品質レポート ---------
 st.header("📋 データ品質レポート")
@@ -131,20 +187,18 @@ st.header("📋 データ品質レポート")
 # 前後比較
 col1, col2, col3 = st.columns(3)  # 3列のカラムを作成
 with col1:
-    st.metric("処理前行数", f"{len(df_before):,}件")
+    st.metric("処理前行数", f"{report_data["rows_before"]:,}件")
 with col2:
-    st.metric("処理後行数", f"{len(df):,}件")
+    st.metric("処理後行数", f"{report_data["rows_after"]:,}件")
 with col3:
-    st.metric("削除行数", f"{len(df_before) - len(df):,}件")
+    st.metric("削除行数", f"{report_data["rows_deleted"]:,}件")
 
 # 欠損値対応結果
 with st.expander("📊 欠損値対応結果"):
-    missing_before = df_before.isnull().sum()  # 前処理前行数の欠損値を計算
-    missing_after = df.isnull().sum()  # 後処理後行数の欠損値を計算
     missing_report = pd.DataFrame({
-        "列名": missing_before.index,
-        "前処理前行数": missing_before.values,
-        "後処理後行数": missing_after.values,
+        "列名": report_data["missing_before"].index,
+        "前処理前行数": report_data["missing_before"].values,
+        "後処理後行数": report_data["missing_after"].values,
         "対応内容": [
             "不正日付・欠損業を削除",
             "最頻値で補完",
@@ -159,14 +213,6 @@ with st.expander("📊 欠損値対応結果"):
 
 # 異常値対応結果
 with st.expander("📊 異常値対応結果"):
-    # 検出件数を計算
-    invalid_date_count = df_before["date"].astype(str).str.contains("INVALID_DATE").sum()  # INVALID_DATEが含まれる行数を計算
-    unit_price_negative = (df_before["unit_price"] < 0).sum()  # マイナス値の行数を計算
-    unit_price_large = (df_before["unit_price"] > unit_price_uppper).sum()  # 平均の10倍以上の行数を計算
-    quantity_negative = (df_before["quantity"] < 0).sum()  # マイナス値の行数を計算
-    sales_amount_negative = (df_before["sales_amount"] < 0).sum()  # マイナス値の行数を計算
-    sales_amount_large = (df_before["sales_amount"] > sales_amount_uppper).sum()  # 平均の10倍以上の行数を計算
-
     # レポートデータを作成
     anomaly_report = pd.DataFrame({
         "列名": ["date", "unit_price", "unit_price", "quantity", "sales_amount", "sales_amount"],
@@ -179,12 +225,12 @@ with st.expander("📊 異常値対応結果"):
             "IQR法による異常値"
         ],
         "検出件数": [
-            invalid_date_count,
-            unit_price_negative,
-            unit_price_large,
-            quantity_negative,
-            sales_amount_negative,
-            sales_amount_large
+            report_data["anomaly_counts"]["invalid_date"],
+            report_data["anomaly_counts"]["unit_price_negative"],
+            report_data["anomaly_counts"]["unit_price_large"],
+            report_data["anomaly_counts"]["quantity_negative"],
+            report_data["anomaly_counts"]["sales_amount_negative"],
+            report_data["anomaly_counts"]["sales_amount_large"]
         ],
         "対応内容": [
             "不正業を削除",
@@ -208,13 +254,13 @@ st.dataframe(df.head(10))  # 最初の10行を表示
 col1, col2, col3, = st.columns(3)
 
 with col1:
-    st.metric("総売上", f"{df['sales_amount'].sum():,}円")  # 総売上を表示
+    st.metric("総売上", f"{df["sales_amount"].sum():,}円")  # 総売上を表示
 
 with col2:
     st.metric("総件数", f"{len(df):,}件")  # 総件数を表示
 
 with col3:
-    st.metric("平均売上", f"{df['sales_amount'].mean():,.0f}円")  # 平均売上を表示
+    st.metric("平均売上", f"{df["sales_amount"].mean():,.0f}円")  # 平均売上を表示
 
 st.markdown("---")  # 区切り線の表示設定
 st.success("✅ Streamlitアプリが正常に動作しています!")
@@ -242,7 +288,7 @@ with tab1:
     ax.set_ylabel("売上金額（円）", fontsize=12)
 
     # Y軸を見やすく（万単位で表示）
-    ax.yaxis.set_major_formatter(plt.FuncFormatter(lambda x, pos: f"{int(x/10000)}万"))
+    format_yaxis_man(ax)
 
     ax.grid(True, alpha=0.3)
     plt.tight_layout()
@@ -266,7 +312,7 @@ with tab2:
     ax.set_ylabel("売上金額（円）", fontsize=12)
 
     # Y軸を見やすく（万単位で表示）
-    ax.yaxis.set_major_formatter(plt.FuncFormatter(lambda x, pos: f"{int(x/10000)}万"))
+    format_yaxis_man(ax)
 
     plt.xticks(rotation=45)
     ax.grid(True, alpha=0.3, axis="y")
@@ -310,7 +356,7 @@ with tab3:
         ax.set_ylabel("売上金額（円）", fontsize=12)
 
         # Y軸を見やすく（万単位で表示）
-        ax.yaxis.set_major_formatter(plt.FuncFormatter(lambda x, pos: f"{int(x/10000)}万"))
+        format_yaxis_man(ax)
 
         ax.grid(True, alpha=0.3, axis="y")
         plt.tight_layout()
@@ -332,7 +378,7 @@ with tab4:
     plt.xticks(rotation=45, ha="right")
 
     # Y軸を見やすく（万単位で表示）
-    ax.yaxis.set_major_formatter(plt.FuncFormatter(lambda x, pos: f"{int(x/10000)}万"))
+    format_yaxis_man(ax)
 
     ax.grid(True, alpha=0.3, axis="y")
     plt.tight_layout()
