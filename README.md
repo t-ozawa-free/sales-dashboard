@@ -46,31 +46,31 @@
 ---
 
 ## ファイル構成
-'''
+```
 sales-dashboard/
 ├── app.py                          # メインアプリケーション
 ├── sample_sales_data.csv           # サンプルデータ
 ├── sample_sales_data_noisy.csv     # テスト用ノイズ入りデータ
 ├── requirements.txt                # 依存ライブラリ
 └── README.md                       # このファイル
-'''
+```
 
 ---
 
 ## 使い方
 
 ### 1. アプリケーションの起動
-'''bash
+```bash
 # プロジェクトディレクトリに移動
 cd sales-dashboard
 
 # 仮想環境を有効化
 venv\Scripts\activate  # Windows
-source venv/bin/activate  # Max/Linux →非対応
+source venv/bin/activate  # Max/Linux
 
 # アプリケーションを起動
 streamlit run app.py
-'''
+```
 
 ブラウザが自動で開き、ダッシュボードが表示されます。
 
@@ -90,7 +90,7 @@ streamlit run app.py
 ### 3. フィルタの使用
 
 サイドバーの「データフィルタ」で以下を設定：
-- **日付範囲**: 開始時～終了日を選択
+- **日付範囲**: 開始日～終了日を選択
 - **カテゴリ**: 表示したいカテゴリを選択（複数可）
 
 フィルタを変更すると、グラフとメトリクスがリアルタイムで更新されます。
@@ -99,7 +99,7 @@ streamlit run app.py
 
 ### 4. データ品質レポート
 
-アップロード後、自動的にデータ品質レポートが表示されます、
+アップロード後、自動的にデータ品質レポートが表示されます：
 - 処理前後の行数
 - 欠損値対応結果
 - 異常値対応結果
