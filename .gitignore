@@ -33,3 +33,6 @@ wrong_columns.csv
 # IDE
 .vscode/
 .idea/
+
+# 要件定義
+REQUIREMENTS.md
