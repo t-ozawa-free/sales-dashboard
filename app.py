@@ -181,6 +181,51 @@ def preprocess_data(df):
 # ========================================
 df, report_data = preprocess_data(df)
 
+# ========================================
+# フィルタ機能
+# ========================================
+st.sidebar.markdown("---")
+st.sidebar.header("📊 データフィルタ")
+
+# 日付範囲フィルタ
+min_date = df["date"].min().date()  # 最小日付を取得
+max_date = df["date"].max().date()  # 最大日付を取得
+
+date_range = st.sidebar.slider(
+    "日付範囲を選択",
+    value=(min_date, max_date),
+    min_value=min_date,
+    max_value=max_date,
+    help="分析対象の日付範囲を選択してください"
+)
+
+# カテゴリフィルタ
+categories = df["category"].unique().tolist()
+selected_categories = st.sidebar.multiselect(
+    "カテゴリを選択",
+    options=categories,
+    default=categories,
+    help="分析対象のカテゴリを選択してください"
+)
+
+
+# フィルタ運用
+if len(date_range) == 2:  # 日付範囲が選択されている場合
+    start_date, end_date = date_range
+    df = df[
+        (df["date"].dt.date >= start_date) & 
+        (df["date"].dt.date <= end_date) 
+    ]  # 日付範囲でフィルタリング
+
+if selected_categories:  # カテゴリが選択されている場合
+    df = df[df["category"].isin(selected_categories)]  # カテゴリでフィルタリング
+else:
+    st.warning("⚠️ カテゴリが選択されていません。全カテゴリを表示します。")
+
+# フィルタ後の件数表示
+st.sidebar.info(f"📊 フィルタ後の件数: {len(df):,}件")
+
+
 # --------- データ品質レポート ---------
 st.header("📋 データ品質レポート")
 
