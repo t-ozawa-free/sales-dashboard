@@ -16,3 +16,20 @@ __pycache__/
 
 # その他
 .DS_Store
+Thumbs.db
+
+# Streamlit一時ファイル
+.streamlit/
+
+# matplotlib自動生成ファイル
+*.png
+!screenshots/*.png
+
+# テスト用ファイル
+empty.csv
+header_only.csv
+wrong_columns.csv
+
+# IDE
+.vscode/
+.idea/
